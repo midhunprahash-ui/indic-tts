@@ -94,13 +94,88 @@ class HFLocalRuntime:
         except TypeError as exc:
             # Some TTS pipelines accept only plain text with no style kwargs.
             if kwargs and "unexpected keyword argument" in str(exc):
-                result = runner(text)
+                result = self._run_with_length_retry(runner=runner, text=text, kwargs={}, config=config)
             else:
                 raise ModelUnavailableError(f"Local model inference failed: {exc}") from exc
         except Exception as exc:  # noqa: BLE001
-            raise ModelUnavailableError(f"Local model inference failed: {exc}") from exc
+            if self._is_max_length_error(exc):
+                result = self._run_with_length_retry(runner=runner, text=text, kwargs=kwargs, config=config)
+            else:
+                raise ModelUnavailableError(f"Local model inference failed: {exc}") from exc
 
         return self._extract_audio_bytes(result)
+
+    def _run_with_length_retry(
+        self,
+        runner: Any,
+        text: str,
+        kwargs: dict[str, Any],
+        config: dict[str, Any],
+    ) -> Any:
+        try:
+            return runner(text, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            if not self._is_max_length_error(exc):
+                raise ModelUnavailableError(f"Local model inference failed: {exc}") from exc
+
+        max_new_tokens = self._bounded_max_new_tokens(config=config, text=text)
+        max_length = self._infer_max_length_from_error(config=config, text=text)
+
+        attempts: list[dict[str, Any]] = [
+            {**kwargs, "max_new_tokens": max_new_tokens},
+            {**kwargs, "generate_kwargs": {"max_new_tokens": max_new_tokens}},
+            {"max_new_tokens": max_new_tokens},
+            {"generate_kwargs": {"max_new_tokens": max_new_tokens}},
+            {**kwargs, "max_length": max_length},
+            {"max_length": max_length},
+        ]
+
+        last_error: Exception | None = None
+        for attempt_kwargs in attempts:
+            try:
+                return runner(text, **attempt_kwargs)
+            except TypeError as exc:
+                # Some pipeline wrappers reject specific generation kwargs.
+                if "unexpected keyword argument" in str(exc):
+                    last_error = exc
+                    continue
+                last_error = exc
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                if self._is_max_length_error(exc):
+                    continue
+                break
+
+        if last_error is None:
+            raise ModelUnavailableError("Local model inference failed due to generation length settings.")
+        raise ModelUnavailableError(f"Local model inference failed: {last_error}") from last_error
+
+    @staticmethod
+    def _is_max_length_error(exc: Exception) -> bool:
+        message = str(exc).lower()
+        return "input length of input_ids" in message and "max_length" in message
+
+    @staticmethod
+    def _bounded_max_new_tokens(config: dict[str, Any], text: str) -> int:
+        fallback = max(128, min(1024, len(text.split()) * 8))
+        raw = config.get("max_new_tokens", fallback)
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = fallback
+        return max(64, min(2048, value))
+
+    def _infer_max_length_from_error(self, config: dict[str, Any], text: str) -> int:
+        if raw_value := config.get("max_length"):
+            try:
+                parsed = int(raw_value)
+                if parsed > 0:
+                    return parsed
+            except (TypeError, ValueError):
+                pass
+
+        estimated_input_len = max(64, len(text.split()) * 2)
+        return estimated_input_len + self._bounded_max_new_tokens(config=config, text=text)
 
     def _load_parler_runtime(self, model_repo: str, device_pref: str, torch_module):
         try:
