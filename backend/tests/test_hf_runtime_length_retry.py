@@ -48,3 +48,14 @@ def test_prompt_typeerror_then_length_retry_still_succeeds() -> None:
     assert audio == b"\x00\x01\x02"
     assert any(call.get("max_new_tokens") == 384 for call in runner.calls)
 
+
+class AmbiguousBoolAudio:
+    def __bool__(self):
+        raise ValueError("truth value is ambiguous")
+
+
+def test_extract_audio_bytes_does_not_bool_eval_array_like_values() -> None:
+    runtime = HFLocalRuntime(Settings())
+    runtime._array_to_wav_bytes = lambda audio, sample_rate: b"\x10\x11"  # type: ignore[attr-defined]
+    audio = runtime._extract_audio_bytes({"audio": AmbiguousBoolAudio(), "sampling_rate": 22050})
+    assert audio == b"\x10\x11"

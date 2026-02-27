@@ -238,7 +238,10 @@ class HFLocalRuntime:
         if isinstance(result, dict):
             if isinstance(result.get("audio"), (bytes, bytearray)):
                 return bytes(result["audio"])
-            audio_candidate = result.get("audio") or result.get("wav") or result.get("speech")
+            for key in ("audio", "wav", "speech"):
+                if key in result and result.get(key) is not None:
+                    audio_candidate = result.get(key)
+                    break
             sample_rate = int(result.get("sampling_rate", sample_rate))
         elif isinstance(result, (bytes, bytearray)):
             return bytes(result)
