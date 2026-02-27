@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     model_timeout_seconds: int = 45
     max_concurrent_synth: int = 6
     request_timeout_seconds: int = 35
+    backend_role: str = "all_local"
 
     # Sarvam
     sarvam_api_key: str | None = None
@@ -50,6 +51,10 @@ class Settings(BaseSettings):
     local_dtype: str = "float32"
     local_model_warmup: bool = False
     local_model_timeout_seconds: int = 900
+
+    # Remote self-hosted worker routing (Lightning)
+    remote_self_hosted_url: str | None = None
+    remote_self_hosted_timeout_seconds: int = 120
 
     # alias overrides
     hf_alias_maya_research_veena_all_v1: str = "maya-research/Veena"

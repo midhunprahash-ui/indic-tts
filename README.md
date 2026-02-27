@@ -26,6 +26,10 @@ Production-style demo app to compare Tanglish/Tamil/English TTS models side-by-s
     - `ai4bharat/indic-parler-tts`
     - `maya-research/veena-all-v1`
 - One adapter class per model + shared runtime helpers.
+- Backend supports split execution modes:
+  - `all_local`: cloud + self-hosted on one machine
+  - `orchestrator`: cloud local + self-hosted remote (Lightning worker)
+  - `self_hosted_worker`: self-hosted only (for Lightning)
 - API endpoints:
   - `GET /health`
   - `GET /models/catalog`
@@ -58,7 +62,28 @@ Production-style demo app to compare Tanglish/Tamil/English TTS models side-by-s
   - `latency_ms`
   - `streaming_used`
   - `error`
-- Self-hosted adapters use lazy local HF runtime loading with graceful dependency/model errors.
+- Self-hosted adapters support:
+  - local HF runtime (`all_local` / `self_hosted_worker`)
+  - remote proxy execution (`orchestrator`) via `REMOTE_SELF_HOSTED_URL`
+
+## Split deployment (local + Lightning)
+
+Use this when you want cloud APIs on your laptop and self-hosted inference on Lightning.
+
+1. Deploy backend on Lightning with:
+   - `BACKEND_ROLE=self_hosted_worker`
+   - HF/runtime env values (`HF_TOKEN`, `HF_HOME`, `HF_CACHE_DIR`, `LOCAL_DEVICE`, etc.)
+2. Start Lightning backend and copy the public HTTPS URL.
+3. On local backend set:
+   - `BACKEND_ROLE=orchestrator`
+   - `REMOTE_SELF_HOSTED_URL=https://<your-lightning-backend>`
+4. Keep cloud provider keys only on local backend.
+5. Frontend continues using local backend (`VITE_BACKEND_BASE_URL=http://localhost:8000`).
+
+Result:
+- Cloud model tabs run locally.
+- Self-hosted model tabs run remotely on Lightning.
+- If Lightning is unavailable, self-hosted models fail independently and cloud models still work.
 
 ## Prerequisites
 
@@ -120,6 +145,19 @@ Run backend:
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+Role examples:
+
+```bash
+# Default single-machine mode
+BACKEND_ROLE=all_local uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Local orchestrator mode (cloud local, self-hosted remote)
+BACKEND_ROLE=orchestrator REMOTE_SELF_HOSTED_URL=https://<worker-url> uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Lightning worker mode (self-hosted only)
+BACKEND_ROLE=self_hosted_worker uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
 ## Frontend setup
 
 ```bash
@@ -135,6 +173,10 @@ Frontend default URL: `http://localhost:5173`
 
 - Backend template: `backend/.env.example`
 - Frontend template: `frontend/.env.example`
+- New backend vars for split mode:
+  - `BACKEND_ROLE`
+  - `REMOTE_SELF_HOSTED_URL`
+  - `REMOTE_SELF_HOSTED_TIMEOUT_SECONDS`
 
 ## API quick checks
 
@@ -180,8 +222,8 @@ curl -s -X POST http://localhost:8000/tts/synthesize-batch \
 - `aws:en-IN-SeemaNeural`: Polly synthesize API (REST style).
 - `aws:ta-IN-RamyaNeural`: Polly synthesize API (REST style).
 - `elevenlabs:Adam-Indian-accent`: streaming endpoint first, convert endpoint fallback.
-- `ai4bharat/indic-parler-tts`: local self-hosted runtime (non-streaming).
-- `maya-research/veena-all-v1`: local self-hosted runtime (non-streaming), aliased by default to `maya-research/Veena`.
+- `ai4bharat/indic-parler-tts`: self-hosted runtime (local or Lightning worker), non-streaming.
+- `maya-research/veena-all-v1`: self-hosted runtime (local or Lightning worker), non-streaming, aliased by default to `maya-research/Veena`.
 
 ## Model-specific limitations
 
@@ -191,6 +233,7 @@ curl -s -X POST http://localhost:8000/tts/synthesize-batch \
 - AWS Polly voices/engines vary by region; if a requested voice-engine combo is unsupported in your account region, adapter returns a model-level error.
 - ElevenLabs `Adam (Indian accent)` depends on configured `ELEVENLABS_ADAM_VOICE_ID` and plan limits for selected output format.
 - Self-hosted HF models may require extra runtime dependencies and/or model-specific code; adapters fail gracefully with actionable errors when unavailable.
+- In `orchestrator` mode, self-hosted models require reachable `REMOTE_SELF_HOSTED_URL`.
 
 ## Quick model testing guide
 
