@@ -24,3 +24,6 @@ frontend/dist/
 
 # HF / model cache
 backend/.hf/
+
+# Local run artifacts
+.run/

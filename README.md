@@ -85,6 +85,39 @@ Result:
 - Self-hosted model tabs run remotely on Lightning.
 - If Lightning is unavailable, self-hosted models fail independently and cloud models still work.
 
+### One-command start/stop (recommended)
+
+From repo root:
+
+```bash
+./scripts/start_split_stack.sh
+```
+
+This command will:
+- ensure Lightning worker backend is running over SSH
+- ensure SSH tunnel `localhost:9001 -> lightning:8000`
+- start local orchestrator backend on `:8000` (if not already running)
+- start frontend on `:5173` (if not already running)
+
+Stop local stack + tunnel:
+
+```bash
+./scripts/stop_split_stack.sh
+```
+
+Optional: also stop remote Lightning worker:
+
+```bash
+STOP_REMOTE_WORKER=true ./scripts/stop_split_stack.sh
+```
+
+Configurable env vars for scripts:
+- `LIGHTNING_SSH_HOST` (default `s_01kj8andtgxz010b21w69n9ncs@ssh.lightning.ai`)
+- `LIGHTNING_WORKDIR` (default `/teamspace/studios/this_studio/indic-tts/backend`)
+- `TUNNEL_PORT` (default `9001`)
+- `BACKEND_PORT` (default `8000`)
+- `FRONTEND_PORT` (default `5173`)
+
 ## Prerequisites
 
 - Python `3.11+` (recommended; verified on `3.11.14`)
