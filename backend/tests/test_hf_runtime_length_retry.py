@@ -59,3 +59,10 @@ def test_extract_audio_bytes_does_not_bool_eval_array_like_values() -> None:
     runtime._array_to_wav_bytes = lambda audio, sample_rate: b"\x10\x11"  # type: ignore[attr-defined]
     audio = runtime._extract_audio_bytes({"audio": AmbiguousBoolAudio(), "sampling_rate": 22050})
     assert audio == b"\x10\x11"
+
+
+def test_extract_audio_bytes_handles_none_sampling_rate() -> None:
+    runtime = HFLocalRuntime(Settings())
+    runtime._array_to_wav_bytes = lambda audio, sample_rate: b"\x12\x13"  # type: ignore[attr-defined]
+    audio = runtime._extract_audio_bytes({"audio": [0.1, -0.2], "sampling_rate": None})
+    assert audio == b"\x12\x13"

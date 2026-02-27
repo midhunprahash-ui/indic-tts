@@ -242,7 +242,12 @@ class HFLocalRuntime:
                 if key in result and result.get(key) is not None:
                     audio_candidate = result.get(key)
                     break
-            sample_rate = int(result.get("sampling_rate", sample_rate))
+            raw_sample_rate = result.get("sampling_rate")
+            if raw_sample_rate is not None:
+                try:
+                    sample_rate = int(raw_sample_rate)
+                except (TypeError, ValueError):
+                    pass
         elif isinstance(result, (bytes, bytearray)):
             return bytes(result)
         else:
