@@ -1,0 +1,26 @@
+# OS / editor
+.DS_Store
+
+# Secrets / env
+.env
+**/.env
+*.pem
+*.key
+*credentials*.json
+backend/Cospin TTS Config.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+backend/.venv/
+
+# Node
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+
+# HF / model cache
+backend/.hf/
