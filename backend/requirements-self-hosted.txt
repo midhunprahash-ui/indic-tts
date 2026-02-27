@@ -1,5 +1,5 @@
 # Optional dependencies for running self-hosted HF TTS models locally.
-transformers==4.55.0
+transformers==4.46.1
 torch==2.8.0
 numpy==2.3.2
 azure-cognitiveservices-speech==1.45.0
