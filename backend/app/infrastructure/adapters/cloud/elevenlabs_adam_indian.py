@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.domain.entities import AdapterAudio, ConfigField, ConfigFieldOption, ModelCapabilities
+from app.domain.entities import AdapterAudio, ConfigField, ConfigFieldOption, ConfigStatus, ModelCapabilities
 from app.domain.errors import ModelUnavailableError, ProviderAuthError
 from app.infrastructure.adapters.base import BaseAdapter
 
@@ -57,6 +57,16 @@ class ElevenLabsAdamIndianAdapter(BaseAdapter):
         ),
     ]
 
+    def __init__(self, settings, http_client):
+        super().__init__(settings, http_client)
+        self._account_blocked_reason: str | None = None
+
+    def check_configuration(self) -> ConfigStatus:
+        status = super().check_configuration()
+        if self._account_blocked_reason:
+            return ConfigStatus(configured=False, warnings=[*status.warnings, self._account_blocked_reason])
+        return status
+
     async def synthesize(self, text: str, config: dict[str, Any], prefer_streaming: bool) -> AdapterAudio:
         voice_id = str(config.get("voice_id") or self.settings.elevenlabs_adam_voice_id or "").strip()
         if not voice_id:
@@ -86,6 +96,8 @@ class ElevenLabsAdamIndianAdapter(BaseAdapter):
                     output_format=output_format,
                 )
                 return AdapterAudio(audio_bytes=audio, audio_format="mp3", streaming_used=True)
+            except ProviderAuthError:
+                raise
             except Exception:  # noqa: BLE001
                 pass
 
@@ -110,6 +122,13 @@ class ElevenLabsAdamIndianAdapter(BaseAdapter):
 
         if response.status_code in {401, 403}:
             provider_detail = self._extract_detail(response.text)
+            normalized = provider_detail.lower()
+            if "detected_unusual_activity" in normalized or "free tier usage disabled" in normalized:
+                self._account_blocked_reason = (
+                    "ElevenLabs account blocked by abuse detector (free tier disabled). "
+                    "Disable VPN/proxy and use a paid plan or a compliant API key."
+                )
+                raise ProviderAuthError(self._account_blocked_reason)
             raise ProviderAuthError(f"ElevenLabs authentication failed. {provider_detail}")
         if response.status_code >= 400:
             raise ModelUnavailableError(f"ElevenLabs error {response.status_code}: {response.text[:300]}")
