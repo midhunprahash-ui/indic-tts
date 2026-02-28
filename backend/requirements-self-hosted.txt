@@ -5,3 +5,4 @@ numpy==2.3.2
 azure-cognitiveservices-speech==1.45.0
 google-cloud-texttospeech==2.31.0
 parler-tts==0.2.3
+snac

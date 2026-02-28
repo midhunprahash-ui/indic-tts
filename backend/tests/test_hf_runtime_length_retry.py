@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.infrastructure.adapters.self_hosted.hf_runtime import HFLocalRuntime
 from app.infrastructure.config.settings import Settings
 
@@ -66,3 +68,48 @@ def test_extract_audio_bytes_handles_none_sampling_rate() -> None:
     runtime._array_to_wav_bytes = lambda audio, sample_rate: b"\x12\x13"  # type: ignore[attr-defined]
     audio = runtime._extract_audio_bytes({"audio": [0.1, -0.2], "sampling_rate": None})
     assert audio == b"\x12\x13"
+
+
+def test_run_veena_decodes_snac_tokens() -> None:
+    torch = pytest.importorskip("torch")
+    runtime = HFLocalRuntime(Settings())
+
+    audio_code_base_offset = 128266
+    offsets = [audio_code_base_offset + i * 4096 for i in range(7)]
+    veena_group = [offsets[0] + 1, offsets[1] + 2, offsets[2] + 3, offsets[3] + 4, offsets[4] + 5, offsets[5] + 6, offsets[6] + 7]
+
+    class DummyTokenizer:
+        pad_token_id = 0
+        eos_token_id = 1
+
+        @staticmethod
+        def encode(prompt: str, add_special_tokens: bool = False):
+            _ = (prompt, add_special_tokens)
+            return [101, 102, 103]
+
+    class DummyModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.p = torch.nn.Parameter(torch.zeros(1))
+
+        def generate(self, input_ids, **kwargs):
+            _ = kwargs
+            generated = torch.tensor([*veena_group, 128258], device=input_ids.device)
+            return torch.cat([input_ids, generated.unsqueeze(0)], dim=1)
+
+    class DummySNAC(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.p = torch.nn.Parameter(torch.zeros(1))
+
+        def decode(self, hierarchical_codes):
+            _ = hierarchical_codes
+            return torch.linspace(-0.5, 0.5, steps=480, device=self.p.device).unsqueeze(0)
+
+    wav = runtime._run_veena(
+        {"model": DummyModel(), "tokenizer": DummyTokenizer(), "snac_model": DummySNAC()},
+        text="Hello Tanglish world",
+        config={"speaker": "kavya", "max_new_tokens": 64},
+    )
+    assert isinstance(wav, bytes)
+    assert len(wav) > 44
