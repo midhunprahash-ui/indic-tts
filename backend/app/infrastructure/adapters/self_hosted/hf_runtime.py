@@ -210,7 +210,7 @@ class HFLocalRuntime:
 
     def _load_veena_runtime(self, model_repo: str, device_pref: str, torch_module):
         try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+            from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError as exc:
             raise DependencyMissingError("transformers is required for Veena runtime") from exc
         try:
@@ -223,26 +223,16 @@ class HFLocalRuntime:
             token_kwargs["token"] = self._settings.hf_token
 
         use_cuda = device_pref.startswith("cuda") and torch_module.cuda.is_available()
-        model_kwargs: dict[str, Any] = {"trust_remote_code": True}
-        if use_cuda:
-            try:
-                import bitsandbytes  # noqa: F401
-
-                model_kwargs["quantization_config"] = BitsAndBytesConfig(
-                    load_in_4bit=True,
-                    bnb_4bit_quant_type="nf4",
-                    bnb_4bit_compute_dtype=torch_module.bfloat16,
-                    bnb_4bit_use_double_quant=True,
-                )
-                model_kwargs["device_map"] = "auto"
-            except Exception:  # noqa: BLE001
-                model_kwargs["torch_dtype"] = torch_module.float16
-                model_kwargs["device_map"] = "auto"
-        else:
-            model_kwargs["torch_dtype"] = torch_module.float32
+        model_kwargs: dict[str, Any] = {
+            "trust_remote_code": True,
+            "torch_dtype": torch_module.float16 if use_cuda else torch_module.float32,
+        }
 
         try:
             model = AutoModelForCausalLM.from_pretrained(model_repo, **token_kwargs, **model_kwargs)
+            if use_cuda:
+                model = model.to("cuda:0")
+            model = model.eval()
         except Exception as exc:  # noqa: BLE001
             raise ModelUnavailableError(f"Failed to load Veena model '{model_repo}': {exc}") from exc
 
