@@ -22,7 +22,7 @@ class SarvamBulbulV2Adapter(BaseAdapter):
             key="target_language_code",
             label="Target Language",
             input_type="select",
-            default="en-IN",
+            default="ta-IN",
             options=[
                 ConfigFieldOption(label="English (India)", value="en-IN"),
                 ConfigFieldOption(label="Tamil (India)", value="ta-IN"),
@@ -66,7 +66,7 @@ class SarvamBulbulV2Adapter(BaseAdapter):
         except ImportError as exc:
             raise ModelUnavailableError("websockets dependency missing for Sarvam streaming") from exc
 
-        language = str(config.get("target_language_code", "en-IN"))
+        language = str(config.get("target_language_code", "ta-IN"))
         speaker = str(config.get("speaker", "anushka"))
         pace = self._coerce_float(config, "pace", 1.0)
         pitch = self._coerce_float(config, "pitch", 0.0)
@@ -125,7 +125,7 @@ class SarvamBulbulV2Adapter(BaseAdapter):
         audio_format = str(config.get("audio_format", "WAV")).upper()
         payload = {
             "text": text,
-            "target_language_code": str(config.get("target_language_code", "en-IN")),
+            "target_language_code": str(config.get("target_language_code", "ta-IN")),
             "model": "bulbul:v2",
             "speaker": str(config.get("speaker", "anushka")),
             "audio_format": audio_format,

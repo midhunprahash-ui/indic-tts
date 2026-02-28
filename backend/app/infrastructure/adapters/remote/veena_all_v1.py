@@ -13,7 +13,7 @@ class RemoteVeenaAllV1Adapter(RemoteSelfHostedAdapterBase):
             key="prompt",
             label="Style Prompt (Optional)",
             input_type="textarea",
-            default="Clear Indian English cadence with light expressiveness.",
+            default="Clear Tamil pronunciation with natural conversational rhythm.",
         ),
         ConfigField(
             key="speaker",

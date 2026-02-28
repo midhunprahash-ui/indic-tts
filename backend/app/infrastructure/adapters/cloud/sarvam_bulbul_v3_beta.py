@@ -21,7 +21,7 @@ class SarvamBulbulV3BetaAdapter(BaseAdapter):
             key="target_language_code",
             label="Target Language",
             input_type="select",
-            default="en-IN",
+            default="ta-IN",
             options=[
                 ConfigFieldOption(label="English (India)", value="en-IN"),
                 ConfigFieldOption(label="Tamil (India)", value="ta-IN"),
@@ -56,7 +56,7 @@ class SarvamBulbulV3BetaAdapter(BaseAdapter):
         audio_format = str(config.get("audio_format", "WAV")).upper()
         payload_base = {
             "text": text,
-            "target_language_code": str(config.get("target_language_code", "en-IN")),
+            "target_language_code": str(config.get("target_language_code", "ta-IN")),
             "speaker": str(config.get("speaker", "anushka")),
             "audio_format": audio_format,
         }

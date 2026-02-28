@@ -26,7 +26,7 @@ export function usePlaygroundStore() {
   const [models, setModels] = useState<ModelCatalogItem[]>([])
   const [activeModelId, setActiveModelId] = useState<string>('')
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([])
-  const [text, setText] = useState<string>('Vanakkam! This is Tanglish text-to-speech testing.')
+  const [text, setText] = useState<string>('வணக்கம்! இது தமிழ் உரை குரல் சோதனை. தயவுசெய்து இதை தெளிவாக பேசவும்.')
   const [modelConfigs, setModelConfigs] = useState<ConfigMap>({})
   const [results, setResults] = useState<Record<string, ModelRunState>>({})
   const [loadingCatalog, setLoadingCatalog] = useState(false)
