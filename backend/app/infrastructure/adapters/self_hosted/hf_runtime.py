@@ -334,19 +334,20 @@ class HFLocalRuntime:
 
         temperature = self._coerce_optional_float(config.get("temperature"), 0.4)
         top_p = self._coerce_optional_float(config.get("top_p"), 0.9)
+        min_new_tokens = max(128, min(512, max_new_tokens // 3))
 
         input_ids = torch.tensor([input_tokens], device=model_device)
         try:
             with torch.no_grad():
                 output = model.generate(
                     input_ids,
+                    min_new_tokens=min_new_tokens,
                     max_new_tokens=max_new_tokens,
                     do_sample=True,
                     temperature=temperature,
                     top_p=top_p,
                     repetition_penalty=1.05,
                     pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
-                    eos_token_id=[end_of_speech, end_of_ai],
                 )
         except Exception as exc:  # noqa: BLE001
             raise ModelUnavailableError(f"Veena generation failed: {exc}") from exc
