@@ -123,11 +123,15 @@ class SarvamBulbulV2Adapter(BaseAdapter):
     async def _synthesize_rest(self, text: str, config: dict[str, Any]) -> AdapterAudio:
         url = f"{self.settings.sarvam_base_url.rstrip('/')}/text-to-speech/convert"
         audio_format = str(config.get("audio_format", "WAV")).upper()
+        pace = self._coerce_float(config, "pace", 1.0)
+        pitch = self._coerce_float(config, "pitch", 0.0)
         payload = {
             "text": text,
             "target_language_code": str(config.get("target_language_code", "ta-IN")),
             "model": "bulbul:v2",
             "speaker": str(config.get("speaker", "anushka")),
+            "pace": pace,
+            "pitch": pitch,
             "audio_format": audio_format,
         }
         response = await self.http_client.post(

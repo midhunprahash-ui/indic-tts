@@ -9,12 +9,22 @@ from app.domain.errors import DependencyMissingError, ModelUnavailableError, Pro
 from app.infrastructure.adapters.base import BaseAdapter
 
 
-class AWSPollyAdapterBase(BaseAdapter):
-    provider = "aws"
-    category = "cloud"
-    capabilities = ModelCapabilities(streaming_available=False, supports_speed=True, supports_pitch=True)
-    required_settings_fields = ["aws_access_key_id", "aws_secret_access_key", "aws_region"]
-    config_schema = [
+def build_aws_polly_config_schema(default_language_code: str, default_voice_id: str) -> list[ConfigField]:
+    return [
+        ConfigField(
+            key="language_code",
+            label="Language Code",
+            input_type="text",
+            default=default_language_code,
+            help_text="Polly language code used with the selected voice.",
+        ),
+        ConfigField(
+            key="voice_id",
+            label="Voice ID",
+            input_type="text",
+            default=default_voice_id,
+            help_text="AWS Polly voice id (example: Seema, Ramya).",
+        ),
         ConfigField(
             key="engine",
             label="Engine",
@@ -56,6 +66,14 @@ class AWSPollyAdapterBase(BaseAdapter):
         ),
     ]
 
+
+class AWSPollyAdapterBase(BaseAdapter):
+    provider = "aws"
+    category = "cloud"
+    capabilities = ModelCapabilities(streaming_available=False, supports_speed=True, supports_pitch=True)
+    required_settings_fields = ["aws_access_key_id", "aws_secret_access_key", "aws_region"]
+    config_schema: list[ConfigField] = []
+
     voice_id: str
     language_code: str
 
@@ -64,6 +82,8 @@ class AWSPollyAdapterBase(BaseAdapter):
 
         output_format = str(config.get("output_format", "mp3"))
         engine = str(config.get("engine", "neural"))
+        voice_id = str(config.get("voice_id") or self.voice_id)
+        language_code = str(config.get("language_code") or self.language_code)
         speaking_rate = self._coerce_float(config, "speaking_rate", 1.0)
         pitch = self._coerce_int(config, "pitch", 0)
         text_payload, text_type = self._build_text_payload(text=text, speaking_rate=speaking_rate, pitch=pitch)
@@ -74,6 +94,8 @@ class AWSPollyAdapterBase(BaseAdapter):
             text_type,
             output_format,
             engine,
+            voice_id,
+            language_code,
         )
 
         audio_ext = "mp3" if output_format == "mp3" else "ogg"
@@ -85,6 +107,8 @@ class AWSPollyAdapterBase(BaseAdapter):
         text_type: str,
         output_format: str,
         engine: str,
+        voice_id: str,
+        language_code: str,
     ) -> bytes:
         try:
             import boto3
@@ -104,8 +128,8 @@ class AWSPollyAdapterBase(BaseAdapter):
             response = client.synthesize_speech(
                 Text=text_payload,
                 TextType=text_type,
-                VoiceId=self.voice_id,
-                LanguageCode=self.language_code,
+                VoiceId=voice_id,
+                LanguageCode=language_code,
                 Engine=engine,
                 OutputFormat=output_format,
             )

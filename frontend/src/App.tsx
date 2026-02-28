@@ -33,26 +33,33 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header>
+      <header className="app-header">
         <h1>Tanglish TTS Playground</h1>
-        <p>Compare cloud and self-hosted models with isolated per-model execution.</p>
+        <p>Left: all models · Middle: input and outputs · Right: selected model settings.</p>
       </header>
 
       {globalError ? <div className="error-banner">{globalError}</div> : null}
       <EnvWarnings models={models} />
 
-      <TopTabs
-        models={models}
-        activeModelId={activeModelId}
-        selectedModelIds={selectedModelIds}
-        onSelectTab={setActiveModelId}
-        onToggleSelected={toggleSelectedModel}
-      />
-
       {loadingCatalog ? (
         <p>Loading model catalog...</p>
       ) : (
-        <main className="workspace-grid">
+        <main className="workspace-layout">
+          <section className="models-column">
+            <TopTabs
+              models={models}
+              activeModelId={activeModelId}
+              selectedModelIds={selectedModelIds}
+              onSelectTab={setActiveModelId}
+              onToggleSelected={toggleSelectedModel}
+            />
+          </section>
+
+          <section className="middle-column">
+            <TextComposer text={text} onTextChange={setText} onSpeak={runSingle} onSpeakBatch={runBatch} />
+            <ResultsPanel models={models} results={results} />
+          </section>
+
           <ModelSidebar
             model={activeModel}
             config={activeModel ? modelConfigs[activeModel.model_id] || {} : {}}
@@ -62,11 +69,6 @@ function App() {
               }
             }}
           />
-
-          <div className="center-column">
-            <TextComposer text={text} onTextChange={setText} onSpeak={runSingle} onSpeakBatch={runBatch} />
-            <ResultsPanel models={models} results={results} />
-          </div>
         </main>
       )}
     </div>

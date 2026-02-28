@@ -40,13 +40,16 @@ function CategoryTabs({
   const providerGroups = groupByProvider(items)
 
   return (
-    <section className="tab-group" aria-label={title}>
-      <h3>{title}</h3>
+    <section className="model-group" aria-label={title}>
+      <div className="model-group-head">
+        <h3>{title}</h3>
+        <span>{items.length}</span>
+      </div>
       <div className="provider-groups">
         {providerGroups.map((group) => (
           <div className="provider-group" key={group.provider}>
             <p className="provider-title">{group.provider}</p>
-            <div className="tab-list">
+            <div className="model-list">
               {group.models.map((model) => {
                 const active = model.model_id === activeModelId
                 const selected = selectedModelIds.includes(model.model_id)
@@ -55,11 +58,10 @@ function CategoryTabs({
                   <button
                     key={model.model_id}
                     type="button"
-                    className={`model-tab ${active ? 'active' : ''} ${model.configured ? '' : 'unconfigured'}`.trim()}
+                    className={`model-row ${active ? 'active' : ''} ${model.configured ? '' : 'unconfigured'}`.trim()}
                     onClick={() => onSelectTab(model.model_id)}
                   >
-                    <span>{modelLabel}</span>
-                    {!model.configured ? <small className="mini-warning">Not configured</small> : null}
+                    <span className="model-row-title">{modelLabel}</span>
                     <input
                       aria-label={`Select ${model.display_name}`}
                       type="checkbox"
@@ -67,6 +69,7 @@ function CategoryTabs({
                       onChange={() => onToggleSelected(model.model_id)}
                       onClick={(event) => event.stopPropagation()}
                     />
+                    {!model.configured ? <small className="mini-warning">Not configured</small> : null}
                   </button>
                 )
               })}
@@ -83,7 +86,11 @@ export function TopTabs(props: TopTabsProps) {
   const selfHostedModels = props.models.filter((model) => model.category === 'self_hosted')
 
   return (
-    <div className="top-tabs">
+    <div className="model-browser">
+      <div className="model-browser-head">
+        <h2>Models</h2>
+        <p>Click row to edit config. Checkbox controls batch run.</p>
+      </div>
       <CategoryTabs
         title="Cloud Models"
         items={cloudModels}

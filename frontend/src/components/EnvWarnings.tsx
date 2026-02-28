@@ -12,14 +12,18 @@ export function EnvWarnings({ models }: EnvWarningsProps) {
 
   return (
     <section className="env-warnings" aria-label="Environment warnings">
-      <strong>Configuration warnings</strong>
-      <ul>
-        {unconfigured.map((model) => (
-          <li key={model.model_id}>
-            {model.display_name}: {model.config_warnings.join(', ')}
-          </li>
-        ))}
-      </ul>
+      <details>
+        <summary>
+          <strong>{unconfigured.length} model(s) not configured.</strong> Expand for required env vars.
+        </summary>
+        <ul>
+          {unconfigured.map((model) => (
+            <li key={model.model_id}>
+              {model.display_name}: {model.config_warnings.join(', ')}
+            </li>
+          ))}
+        </ul>
+      </details>
     </section>
   )
 }

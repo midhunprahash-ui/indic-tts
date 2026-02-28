@@ -8,19 +8,22 @@ from app.domain.errors import DependencyMissingError, ModelUnavailableError, Pro
 from app.infrastructure.adapters.base import BaseAdapter
 
 
-class GoogleCloudAdapterBase(BaseAdapter):
-    provider = "google"
-    category = "cloud"
-    capabilities = ModelCapabilities(streaming_available=True, supports_speed=True, supports_pitch=True)
-    required_settings_fields = ["google_application_credentials"]
-    config_schema = [
+def build_google_config_schema(default_language_code: str, default_voice_name: str) -> list[ConfigField]:
+    return [
+        ConfigField(
+            key="language_code",
+            label="Language Code",
+            input_type="text",
+            default=default_language_code,
+            help_text="Default language for this model. Override only with a compatible voice/language pair.",
+        ),
         ConfigField(
             key="voice_name",
-            label="Voice Name Override",
+            label="Voice Name",
             input_type="text",
-            default="",
-            placeholder="Optional full Google voice name",
-            help_text="Leave empty to use model default or automatic fallback voice.",
+            default=default_voice_name,
+            placeholder="Google voice name",
+            help_text="Exact Google voice name to use for synthesis.",
         ),
         ConfigField(
             key="audio_encoding",
@@ -33,21 +36,36 @@ class GoogleCloudAdapterBase(BaseAdapter):
         ConfigField(key="pitch", label="Pitch", input_type="slider", default=0.0, min=-20.0, max=20.0, step=0.5),
     ]
 
+
+class GoogleCloudAdapterBase(BaseAdapter):
+    provider = "google"
+    category = "cloud"
+    capabilities = ModelCapabilities(streaming_available=True, supports_speed=True, supports_pitch=True)
+    required_settings_fields = ["google_application_credentials"]
+    config_schema: list[ConfigField] = []
+
     language_code: str
     voice_name: str
 
     async def synthesize(self, text: str, config: dict[str, Any], prefer_streaming: bool) -> AdapterAudio:
+        language_code = str(config.get("language_code") or self.language_code)
         requested_voice_name = str(config.get("voice_name") or self.voice_name)
         if prefer_streaming:
             try:
-                audio = await self._streaming_synthesize(text, config, requested_voice_name)
+                audio = await self._streaming_synthesize(text, config, requested_voice_name, language_code)
                 if audio:
                     return audio
             except Exception:  # noqa: BLE001
                 pass
-        return await self._rest_synthesize(text, config, requested_voice_name)
+        return await self._rest_synthesize(text, config, requested_voice_name, language_code)
 
-    async def _streaming_synthesize(self, text: str, config: dict[str, Any], voice_name: str) -> AdapterAudio:
+    async def _streaming_synthesize(
+        self,
+        text: str,
+        config: dict[str, Any],
+        voice_name: str,
+        language_code: str,
+    ) -> AdapterAudio:
         try:
             from google.cloud import texttospeech_v1beta1 as tts_beta
         except ImportError as exc:
@@ -55,7 +73,7 @@ class GoogleCloudAdapterBase(BaseAdapter):
 
         encoding = str(config.get("audio_encoding", "MP3")).upper()
         audio_encoding = getattr(tts_beta.AudioEncoding, encoding, tts_beta.AudioEncoding.MP3)
-        voice = tts_beta.VoiceSelectionParams(language_code=self.language_code, name=voice_name)
+        voice = tts_beta.VoiceSelectionParams(language_code=language_code, name=voice_name)
         stream_config = tts_beta.StreamingSynthesizeConfig(
             voice=voice,
             audio_config=tts_beta.AudioConfig(
@@ -87,7 +105,13 @@ class GoogleCloudAdapterBase(BaseAdapter):
         ext = "mp3" if encoding == "MP3" else "wav"
         return AdapterAudio(audio_bytes=chunked, audio_format=ext, streaming_used=True)
 
-    async def _rest_synthesize(self, text: str, config: dict[str, Any], voice_name: str) -> AdapterAudio:
+    async def _rest_synthesize(
+        self,
+        text: str,
+        config: dict[str, Any],
+        voice_name: str,
+        language_code: str,
+    ) -> AdapterAudio:
         try:
             from google.auth.transport.requests import Request
             from google.oauth2 import service_account
@@ -105,16 +129,27 @@ class GoogleCloudAdapterBase(BaseAdapter):
         credentials.refresh(Request())
 
         token = credentials.token
-        response = await self._request_rest_synthesize(token=token, text=text, config=config, voice_name=voice_name)
+        response = await self._request_rest_synthesize(
+            token=token,
+            text=text,
+            config=config,
+            voice_name=voice_name,
+            language_code=language_code,
+        )
 
         if response.status_code == 400 and self._is_voice_not_found(response):
-            fallback_voice = await self._resolve_fallback_voice(token=token, requested_voice=voice_name)
+            fallback_voice = await self._resolve_fallback_voice(
+                token=token,
+                requested_voice=voice_name,
+                language_code=language_code,
+            )
             if fallback_voice:
                 response = await self._request_rest_synthesize(
                     token=token,
                     text=text,
                     config=config,
                     voice_name=fallback_voice,
+                    language_code=language_code,
                 )
             else:
                 # Last resort: ask Google for language-only default voice.
@@ -123,6 +158,7 @@ class GoogleCloudAdapterBase(BaseAdapter):
                     text=text,
                     config=config,
                     voice_name=None,
+                    language_code=language_code,
                 )
 
         if response.status_code in {401, 403}:
@@ -149,8 +185,9 @@ class GoogleCloudAdapterBase(BaseAdapter):
         text: str,
         config: dict[str, Any],
         voice_name: str | None,
+        language_code: str,
     ):
-        voice_payload: dict[str, str] = {"languageCode": self.language_code}
+        voice_payload: dict[str, str] = {"languageCode": language_code}
         if voice_name:
             voice_payload["name"] = voice_name
 
@@ -172,11 +209,16 @@ class GoogleCloudAdapterBase(BaseAdapter):
             json=payload,
         )
 
-    async def _resolve_fallback_voice(self, token: str, requested_voice: str) -> str | None:
+    async def _resolve_fallback_voice(
+        self,
+        token: str,
+        requested_voice: str,
+        language_code: str,
+    ) -> str | None:
         response = await self.http_client.get(
             "https://texttospeech.googleapis.com/v1/voices",
             headers={"Authorization": f"Bearer {token}"},
-            params={"languageCode": self.language_code},
+            params={"languageCode": language_code},
         )
         if response.status_code >= 400:
             return None
@@ -190,7 +232,7 @@ class GoogleCloudAdapterBase(BaseAdapter):
 
         requested_lower = requested_voice.lower()
         base_lower = requested_voice.rsplit("-", 1)[0].lower() if "-" in requested_voice else requested_lower
-        language_prefix = f"{self.language_code.lower()}-"
+        language_prefix = f"{language_code.lower()}-"
         candidates: list[str] = []
 
         def add_if(match_fn):

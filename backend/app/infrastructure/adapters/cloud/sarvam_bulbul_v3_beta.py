@@ -54,10 +54,14 @@ class SarvamBulbulV3BetaAdapter(BaseAdapter):
         _ = prefer_streaming
         url = f"{self.settings.sarvam_base_url.rstrip('/')}/text-to-speech/convert"
         audio_format = str(config.get("audio_format", "WAV")).upper()
+        pace = self._coerce_float(config, "pace", 1.0)
+        pitch = self._coerce_float(config, "pitch", 0.0)
         payload_base = {
             "text": text,
             "target_language_code": str(config.get("target_language_code", "ta-IN")),
             "speaker": str(config.get("speaker", "anushka")),
+            "pace": pace,
+            "pitch": pitch,
             "audio_format": audio_format,
         }
 

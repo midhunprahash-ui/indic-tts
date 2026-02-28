@@ -292,6 +292,12 @@ class HFLocalRuntime:
         attention_mask = description_inputs.attention_mask.to(device)
         prompt_input_ids = prompt_inputs.input_ids.to(device)
         prompt_attention_mask = prompt_inputs.attention_mask.to(device)
+        max_new_tokens = self._bounded_max_new_tokens(config=config, text=prompt_text)
+        temperature = self._coerce_optional_float(config.get("temperature"), 1.0)
+        generation_kwargs: dict[str, Any] = {"max_new_tokens": max_new_tokens}
+        if temperature != 1.0:
+            generation_kwargs["do_sample"] = True
+            generation_kwargs["temperature"] = max(0.1, min(2.0, temperature))
 
         try:
             with torch.no_grad():
@@ -300,6 +306,7 @@ class HFLocalRuntime:
                     attention_mask=attention_mask,
                     prompt_input_ids=prompt_input_ids,
                     prompt_attention_mask=prompt_attention_mask,
+                    **generation_kwargs,
                 )
         except Exception as exc:  # noqa: BLE001
             raise ModelUnavailableError(f"Parler generation failed: {exc}") from exc
