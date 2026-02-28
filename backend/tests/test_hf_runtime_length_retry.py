@@ -113,3 +113,58 @@ def test_run_veena_decodes_snac_tokens() -> None:
     )
     assert isinstance(wav, bytes)
     assert len(wav) > 44
+
+
+def test_run_parler_uses_main_text_as_prompt_and_style_as_description_hint() -> None:
+    torch = pytest.importorskip("torch")
+    runtime = HFLocalRuntime(Settings())
+
+    class DummyTokenizer:
+        def __init__(self):
+            self.calls: list[str] = []
+
+        def __call__(self, text: str, return_tensors: str = "pt"):
+            _ = return_tensors
+            self.calls.append(text)
+            length = max(1, len(text.split()))
+            return type(
+                "TokenBatch",
+                (),
+                {
+                    "input_ids": torch.ones((1, length), dtype=torch.int64),
+                    "attention_mask": torch.ones((1, length), dtype=torch.int64),
+                },
+            )()
+
+    class DummyParlerModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.p = torch.nn.Parameter(torch.zeros(1))
+            self.config = type("Cfg", (), {"sampling_rate": 24000})()
+            self.last_generate_kwargs: dict | None = None
+
+        def generate(self, **kwargs):
+            self.last_generate_kwargs = kwargs
+            # 240 samples at 24kHz => ~0.01s, enough for conversion validation.
+            return torch.linspace(-0.2, 0.2, steps=240).unsqueeze(0)
+
+    tokenizer = DummyTokenizer()
+    model = DummyParlerModel()
+
+    wav = runtime._run_parler(
+        {"model": model, "tokenizer": tokenizer, "device": "cpu"},
+        text="This exact sentence should be spoken",
+        config={
+            "description": "Warm female Tanglish voice",
+            "prompt": "energetic and cheerful",
+        },
+    )
+
+    assert len(tokenizer.calls) == 2
+    # First tokenizer call is description path with appended style hint.
+    assert "Warm female Tanglish voice" in tokenizer.calls[0]
+    assert "energetic and cheerful" in tokenizer.calls[0]
+    # Second tokenizer call must be the center input text (not style hint).
+    assert tokenizer.calls[1] == "This exact sentence should be spoken"
+    assert isinstance(wav, bytes)
+    assert len(wav) > 44

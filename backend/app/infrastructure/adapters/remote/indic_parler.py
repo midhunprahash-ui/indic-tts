@@ -18,10 +18,9 @@ class RemoteIndicParlerAdapter(RemoteSelfHostedAdapterBase):
         ),
         ConfigField(
             key="prompt",
-            label="Prompt Hints",
+            label="Style Hints (Optional)",
             input_type="textarea",
-            default="Friendly and energetic",
-            help_text="Optional style prompt to guide speaking characteristics.",
+            default="",
+            help_text="Optional style guidance appended to speaker description. Spoken text always comes from center input.",
         ),
     ]
-

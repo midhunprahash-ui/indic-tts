@@ -261,20 +261,31 @@ class HFLocalRuntime:
         model = runtime["model"]
         tokenizer = runtime["tokenizer"]
         device = runtime["device"]
-        description = str(
+        base_description = str(
             config.get("description")
             or "A warm Tanglish conversational voice with clear Tamil pronunciation and clean pacing."
         )
-        prompt_text = str(config.get("prompt") or text)
+        # `text` is always the utterance from the main input field.
+        # Optional prompt field is treated as style guidance, not replacement transcript.
+        style_hint = str(config.get("prompt") or "").strip()
+        description = f"{base_description}. Style: {style_hint}" if style_hint else base_description
+        prompt_text = str(text)
 
         description_inputs = tokenizer(description, return_tensors="pt")
         prompt_inputs = tokenizer(prompt_text, return_tensors="pt")
         input_ids = description_inputs.input_ids.to(device)
+        attention_mask = description_inputs.attention_mask.to(device)
         prompt_input_ids = prompt_inputs.input_ids.to(device)
+        prompt_attention_mask = prompt_inputs.attention_mask.to(device)
 
         try:
             with torch.no_grad():
-                generation = model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
+                generation = model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    prompt_input_ids=prompt_input_ids,
+                    prompt_attention_mask=prompt_attention_mask,
+                )
         except Exception as exc:  # noqa: BLE001
             raise ModelUnavailableError(f"Parler generation failed: {exc}") from exc
 
