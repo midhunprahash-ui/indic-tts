@@ -7,6 +7,10 @@ from app.domain.errors import ModelUnavailableError, ProviderAuthError
 from app.infrastructure.adapters.base import BaseAdapter
 
 
+class ElevenLabsVoiceNotFoundError(ModelUnavailableError):
+    """Raised when the requested ElevenLabs voice id does not exist for the account."""
+
+
 class ElevenLabsAdamIndianAdapter(BaseAdapter):
     model_id = "elevenlabs:Adam-Indian-accent"
     display_name = "ElevenLabs - Adam (Indian accent)"
@@ -68,7 +72,9 @@ class ElevenLabsAdamIndianAdapter(BaseAdapter):
         return status
 
     async def synthesize(self, text: str, config: dict[str, Any], prefer_streaming: bool) -> AdapterAudio:
-        voice_id = str(config.get("voice_id") or self.settings.elevenlabs_adam_voice_id or "").strip()
+        default_voice_id = str(self.settings.elevenlabs_adam_voice_id or "").strip()
+        override_voice_id = str(config.get("voice_id") or "").strip()
+        voice_id = override_voice_id or default_voice_id
         if not voice_id:
             raise ModelUnavailableError("ElevenLabs voice_id is missing. Set ELEVENLABS_ADAM_VOICE_ID or provide override.")
 
@@ -88,6 +94,30 @@ class ElevenLabsAdamIndianAdapter(BaseAdapter):
             "voice_settings": voice_settings,
         }
 
+        try:
+            return await self._synthesize_with_voice(
+                voice_id=voice_id,
+                payload=payload,
+                output_format=output_format,
+                prefer_streaming=prefer_streaming,
+            )
+        except ElevenLabsVoiceNotFoundError:
+            if override_voice_id and default_voice_id and override_voice_id != default_voice_id:
+                return await self._synthesize_with_voice(
+                    voice_id=default_voice_id,
+                    payload=payload,
+                    output_format=output_format,
+                    prefer_streaming=prefer_streaming,
+                )
+            raise
+
+    async def _synthesize_with_voice(
+        self,
+        voice_id: str,
+        payload: dict[str, Any],
+        output_format: str,
+        prefer_streaming: bool,
+    ) -> AdapterAudio:
         if prefer_streaming:
             try:
                 audio = await self._request_audio(
@@ -97,6 +127,8 @@ class ElevenLabsAdamIndianAdapter(BaseAdapter):
                 )
                 return AdapterAudio(audio_bytes=audio, audio_format="mp3", streaming_used=True)
             except ProviderAuthError:
+                raise
+            except ElevenLabsVoiceNotFoundError:
                 raise
             except Exception:  # noqa: BLE001
                 pass
@@ -130,6 +162,11 @@ class ElevenLabsAdamIndianAdapter(BaseAdapter):
                 )
                 raise ProviderAuthError(self._account_blocked_reason)
             raise ProviderAuthError(f"ElevenLabs authentication failed. {provider_detail}")
+        if response.status_code == 404 and self._is_voice_not_found(response.text):
+            provider_detail = self._extract_detail(response.text)
+            raise ElevenLabsVoiceNotFoundError(
+                f"ElevenLabs voice not found. Set a valid ELEVENLABS_ADAM_VOICE_ID or clear Voice ID Override. {provider_detail}"
+            )
         if response.status_code >= 400:
             raise ModelUnavailableError(f"ElevenLabs error {response.status_code}: {response.text[:300]}")
         if not response.content:
@@ -152,3 +189,20 @@ class ElevenLabsAdamIndianAdapter(BaseAdapter):
         except Exception:  # noqa: BLE001
             pass
         return raw_text[:220] or "Check API key permissions and account limits."
+
+    @staticmethod
+    def _is_voice_not_found(raw_text: str) -> bool:
+        lowered = raw_text.lower()
+        if "voice_not_found" in lowered:
+            return True
+        try:
+            import json
+
+            data = json.loads(raw_text)
+            detail = data.get("detail", {})
+            code = str(detail.get("code", "")).lower()
+            status = str(detail.get("status", "")).lower()
+            message = str(detail.get("message", "")).lower()
+            return "voice_not_found" in code or "voice_not_found" in status or "voice_id" in message and "not found" in message
+        except Exception:  # noqa: BLE001
+            return False
