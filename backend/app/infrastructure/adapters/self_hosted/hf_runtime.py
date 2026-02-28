@@ -440,10 +440,27 @@ class HFLocalRuntime:
             raise DependencyMissingError("numpy is required to convert local model output to WAV") from exc
 
         arr = np.asarray(audio)
-        if arr.ndim > 1:
-            arr = arr.squeeze()
         if arr.size == 0:
             raise ModelUnavailableError("Local model produced empty audio array")
+
+        channels = 1
+        if arr.ndim == 1:
+            pass
+        elif arr.ndim == 2:
+            # Normalize to shape (frames, channels).
+            if arr.shape[0] <= 8 and arr.shape[1] > arr.shape[0]:
+                arr = arr.T
+            channels = int(arr.shape[1])
+            if channels <= 0:
+                raise ModelUnavailableError("Local model produced invalid channel dimension")
+        else:
+            arr = np.squeeze(arr)
+            if arr.ndim > 2:
+                arr = arr.reshape(-1)
+            if arr.ndim == 2:
+                if arr.shape[0] <= 8 and arr.shape[1] > arr.shape[0]:
+                    arr = arr.T
+                channels = int(arr.shape[1])
 
         if arr.dtype.kind == "f":
             arr = np.clip(arr, -1.0, 1.0)
@@ -453,7 +470,7 @@ class HFLocalRuntime:
 
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wav_file:
-            wav_file.setnchannels(1)
+            wav_file.setnchannels(channels)
             wav_file.setsampwidth(2)
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(arr.tobytes())

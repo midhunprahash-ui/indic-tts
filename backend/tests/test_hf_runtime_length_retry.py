@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import wave
+
 import pytest
 
 from app.infrastructure.adapters.self_hosted.hf_runtime import HFLocalRuntime
@@ -168,3 +171,20 @@ def test_run_parler_uses_main_text_as_prompt_and_style_as_description_hint() -> 
     assert tokenizer.calls[1] == "This exact sentence should be spoken"
     assert isinstance(wav, bytes)
     assert len(wav) > 44
+
+
+def test_array_to_wav_bytes_preserves_stereo_shape() -> None:
+    np = pytest.importorskip("numpy")
+    # Shape (channels, samples) as commonly returned by some TTS runtimes.
+    stereo = np.vstack(
+        [
+            np.linspace(-0.5, 0.5, num=2400, dtype=np.float32),
+            np.linspace(0.5, -0.5, num=2400, dtype=np.float32),
+        ]
+    )
+    wav_bytes = HFLocalRuntime._array_to_wav_bytes(stereo, 24000)
+    with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
+        assert wf.getnchannels() == 2
+        # 2400 frames at 24kHz -> 0.1 seconds.
+        assert wf.getnframes() == 2400
+        assert wf.getframerate() == 24000
