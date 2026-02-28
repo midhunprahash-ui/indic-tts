@@ -40,7 +40,7 @@ ensure_lightning_worker() {
 if curl -fsS --max-time 5 http://127.0.0.1:${REMOTE_WORKER_PORT}/health >/dev/null 2>&1; then \
   echo 'remote_worker=already_running'; \
 else \
-  nohup /system/conda/miniconda3/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${REMOTE_WORKER_PORT} >/tmp/tts_worker.log 2>&1 < /dev/null & \
+  nohup /home/zeus/miniconda3/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${REMOTE_WORKER_PORT} >/tmp/tts_worker.log 2>&1 < /dev/null & \
   sleep 2; \
   echo 'remote_worker=started'; \
 fi; \
