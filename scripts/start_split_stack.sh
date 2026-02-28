@@ -37,10 +37,10 @@ ensure_lightning_worker() {
   echo "[1/4] Ensuring Lightning self-hosted worker is running..."
   local cmd
   cmd="set -e; export PATH=/system/conda/miniconda3/bin:\$PATH; cd '${LIGHTNING_WORKDIR}'; \
-if pgrep -f 'uvicorn app.main:app --host 0.0.0.0 --port ${REMOTE_WORKER_PORT}' >/dev/null; then \
+if curl -fsS --max-time 5 http://127.0.0.1:${REMOTE_WORKER_PORT}/health >/dev/null 2>&1; then \
   echo 'remote_worker=already_running'; \
 else \
-  nohup python -m uvicorn app.main:app --host 0.0.0.0 --port ${REMOTE_WORKER_PORT} >/tmp/tts_worker.log 2>&1 < /dev/null & \
+  nohup /system/conda/miniconda3/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${REMOTE_WORKER_PORT} >/tmp/tts_worker.log 2>&1 < /dev/null & \
   sleep 2; \
   echo 'remote_worker=started'; \
 fi; \
@@ -136,4 +136,3 @@ Logs:
 - ${RUN_DIR}/backend.log
 - ${RUN_DIR}/frontend.log
 EOF
-
