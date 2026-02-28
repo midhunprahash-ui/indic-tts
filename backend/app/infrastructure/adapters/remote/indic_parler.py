@@ -13,14 +13,14 @@ class RemoteIndicParlerAdapter(RemoteSelfHostedAdapterBase):
             key="description",
             label="Speaker Description",
             input_type="textarea",
-            default="A warm Tanglish conversational voice with clear Tamil pronunciation.",
-            help_text="Used by description-conditioned TTS models such as Parler-style voices.",
+            default="Jaya speaks Tamil with clear pronunciation, moderate pace, and very clear audio.",
+            help_text="Voice descriptor used by Indic Parler. Keep this as speaker/style description, not transcript.",
         ),
         ConfigField(
             key="prompt",
             label="Style Hints (Optional)",
             input_type="textarea",
             default="",
-            help_text="Optional style guidance appended to speaker description. Spoken text always comes from center input.",
+            help_text="Optional extra style hints. The center text input is always the spoken transcript.",
         ),
     ]

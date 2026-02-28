@@ -202,11 +202,23 @@ class HFLocalRuntime:
 
         model = ParlerTTSForConditionalGeneration.from_pretrained(model_repo, **kwargs)
         model = model.to(device)
-        tokenizer = AutoTokenizer.from_pretrained(
+        prompt_tokenizer = AutoTokenizer.from_pretrained(
             model_repo,
             token=self._settings.hf_token if self._settings.hf_token else None,
         )
-        return {"kind": "parler", "model": model, "tokenizer": tokenizer, "device": device}
+        text_encoder = getattr(model.config, "text_encoder", None)
+        description_tokenizer_id = getattr(text_encoder, "_name_or_path", None) or model_repo
+        description_tokenizer = AutoTokenizer.from_pretrained(
+            description_tokenizer_id,
+            token=self._settings.hf_token if self._settings.hf_token else None,
+        )
+        return {
+            "kind": "parler",
+            "model": model,
+            "prompt_tokenizer": prompt_tokenizer,
+            "description_tokenizer": description_tokenizer,
+            "device": device,
+        }
 
     def _load_veena_runtime(self, model_repo: str, device_pref: str, torch_module):
         try:
@@ -259,20 +271,23 @@ class HFLocalRuntime:
             raise DependencyMissingError("torch is required for Parler runtime") from exc
 
         model = runtime["model"]
-        tokenizer = runtime["tokenizer"]
+        prompt_tokenizer = runtime.get("prompt_tokenizer") or runtime.get("tokenizer")
+        description_tokenizer = runtime.get("description_tokenizer") or prompt_tokenizer
+        if prompt_tokenizer is None or description_tokenizer is None:
+            raise ModelUnavailableError("Indic Parler runtime tokenizers are not initialized")
         device = runtime["device"]
         base_description = str(
             config.get("description")
-            or "A warm Tanglish conversational voice with clear Tamil pronunciation and clean pacing."
-        )
+            or "Jaya speaks Tamil with clear pronunciation, moderate pace, and very clear audio."
+        ).strip()
         # `text` is always the utterance from the main input field.
         # Optional prompt field is treated as style guidance, not replacement transcript.
         style_hint = str(config.get("prompt") or "").strip()
-        description = f"{base_description}. Style: {style_hint}" if style_hint else base_description
+        description = f"{base_description.rstrip('. ')}. {style_hint}" if style_hint else base_description
         prompt_text = str(text)
 
-        description_inputs = tokenizer(description, return_tensors="pt")
-        prompt_inputs = tokenizer(prompt_text, return_tensors="pt")
+        description_inputs = description_tokenizer(description, return_tensors="pt")
+        prompt_inputs = prompt_tokenizer(prompt_text, return_tensors="pt")
         input_ids = description_inputs.input_ids.to(device)
         attention_mask = description_inputs.attention_mask.to(device)
         prompt_input_ids = prompt_inputs.input_ids.to(device)
@@ -463,10 +478,14 @@ class HFLocalRuntime:
                 channels = int(arr.shape[1])
 
         if arr.dtype.kind == "f":
+            arr = np.nan_to_num(arr, nan=0.0, posinf=1.0, neginf=-1.0)
+            max_abs = float(np.max(np.abs(arr)))
+            if max_abs > 1.0:
+                arr = arr / max_abs
             arr = np.clip(arr, -1.0, 1.0)
             arr = (arr * 32767).astype(np.int16)
         elif arr.dtype != np.int16:
-            arr = arr.astype(np.int16)
+            arr = np.clip(arr, -32768, 32767).astype(np.int16)
 
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wav_file:
